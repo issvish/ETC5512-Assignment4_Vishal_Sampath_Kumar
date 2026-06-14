@@ -258,6 +258,168 @@ The submission will include:
 
 This documentation makes it clear what was downloaded, what was changed, and what was used in the analysis.
 
+## Blog post
+
+### Why take a look at parking congestion data?
+
+Parking in the Melbourne CBD is a familiar source of frustration. It affects everyday social plans, visitor access, and how long people spend circling for a spot. Because the City of Melbourne publishes live data from thousands of parking sensors, it is possible to move beyond anecdotal complaints and examine actual patterns of parking pressure.
+
+This blog post asks three connected questions: First, **which zones appear most consistently occupied?** Second, **how does occupancy vary by hour of the day?** Third, **does occupancy also vary across the days of the week?**\
+The emphasis is on repeated patterns rather than a one-off count, because a zone that stays busy across many windows is more important than one that only spikes briefly. By combining grouped summaries and maps, the analysis aims to identify not just where parking is full, but where it appears persistently full over time.
+
+### Data Sources for Analysing Parking Occupancy in Melbourne
+
+Data for visualising parking occupancy in Melbourne is available through the City of Melbourne’s public open data portal.
+
+The main dataset used here is the parking sensor dataset, which records whether a bay is occupied or unoccupied at specific timestamps. This makes it suitable for constructing a simple measure of parking pressure based on observed occupancy.
+
+The spatial file provides the coordinates needed for mapping, and the parking bays file serves as a supporting source for interpretation. In this analysis, congestion is treated as repeated occupancy rather than, for example, turnover or parking duration. That is an important limitation, but it still provides a clear and interpretable starting point.
+
+To make the analysis defensible, congestion needs to be defined explicitly. Here, congestion is measured as repeated occupied readings, and “consistent congestion” is identified by looking for zones that remain occupied across many hour-by-zone windows rather than only one peak period. That makes the analysis more informative than a simple busiest-zone ranking. A parking zone is treated as more congested when its bays appear occupied more often, and especially when that elevated occupancy persists across multiple time periods rather than only appearing in a single spike.
+
+### Inspecting the data
+
+```{r}
+glimpse(parking_clean)
+glimpse(parking_sensor_geo)
+glimpse(parking_bays_raw)
+```
+
+The cleaned dataset contains `r nrow(parking_clean)` observations and `r ncol(parking_clean)` variables, which indicates that the filtering and recoding steps have left a sizeable working dataset for analysis. The preview also shows the key variables needed later, including timestamps, zone identifiers, occupancy labels, and coordinate values
+
+### What does the data tell us?
+
+The City of Melbourne notes that the sensor dataset records whether a vehicle is present or not present and includes spatial coordinate information and kerbside ID. It also states that the data is updated frequently and can be affected by outages or delays, so the `lastupdated` field is useful for checking freshness.
+
+The first useful summary is the zone-level occupancy table shown below.
+
+#### Aspect 1: Zone patterns
+
+```{r}
+zone_summary <- parking_clean |>
+  group_by(zone_number) |>
+  summarise(
+    records = n(),
+    occ_rate = mean(occupied, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  arrange(desc(occ_rate), desc(records))
+
+zone_summary |>
+  slice_head(n = 10)
+
+```
+
+Looking at the zone summary, the top ten zones all have an occupancy rate of 1. This means every recorded observation for those zones in the cleaned sample was classified as occupied. Among these, zone **7594** stands out with **16 records**, followed by zone **7525** with **11 records** and zone **7220** with **10 records**. Other highly occupied zones, such as 7089 and 7156, also show complete occupancy but with fewer observations.
+
+This result suggests that some zones were effectively always full during the observed sample. At the same time, the `records` column matters for interpretation. A zone with perfect occupancy across many observations is stronger evidence of persistent congestion than a zone with perfect occupancy based on only a handful of rows. This means the most convincing evidence comes from zones that combine a very high occupancy rate with a reasonable number of records.
+
+In general though, all these zones have relatively small record counts, which means their perfect occupancy rates should be interpreted with some caution but this is still an informative result. It suggests that **some zones in the dataset are consistently busy and may represent areas of especially high parking pressure**. However, a high mean occupancy on its own does not distinguish between zones that are always busy and zones that only appear in a limited subset of time periods. To improve on that, it is useful to look at persistence across hourly windows.
+
+A second summary considers persistence across hourly windows rather than just the overall average.
+
+```{r}
+zone_hour <- parking_clean |>
+  group_by(zone_number, hour) |>
+  summarise(
+    hour_occ = mean(occupied, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+threshold <- median(zone_hour$hour_occ, na.rm = TRUE)
+
+persistent_zones <- zone_hour |>
+  mutate(high = hour_occ >= threshold) |>
+  group_by(zone_number) |>
+  summarise(
+    persist_share = mean(high, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  arrange(desc(persist_share))
+
+persistent_zones |>
+  slice_head(n = 10)
+
+```
+
+The persistence table shows that the top ten zones all have a `persist_share` of 1. In this case, that means these zones were above the median hourly occupancy threshold in every observed hourly period used in the calculation. The top group includes zones **7002**, **7015**, **7019**, **7053**, **7089**, **7096**, **7156**, **7160**, **7182**, and **7185**.
+
+This is important because it shows that some zones are not merely busy on average, but repeatedly busy across time. The overlap between this persistence table and the earlier occupancy ranking, especially for zones like **7089** and **7156**, suggests that a smaller subset of zones experiences more durable congestion than the rest of the network.
+
+These summaries make it possible to distinguish between zones that are always busy and zones that are only occasionally busy. A zone with a high `occ_rate` and a high `persist_share` is a stronger candidate for “consistent congestion” than a zone that only has a high reading in one or two periods.
+
+#### Aspect 2: How does occupancy change through the day?
+
+The hourly summary gives a clearer picture of when parking demand is highest.
+
+```{r}
+hour_summary <- parking_clean |>
+  group_by(hour) |>
+  summarise(
+    occ_rate = mean(occupied, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  arrange(hour)
+
+hour_summary
+
+```
+
+```{r}
+ggplot(hour_summary, aes(x = hour, y = occ_rate)) +
+  geom_col(fill = "#2a6fdb") +
+  scale_x_continuous(breaks = seq(0, 23, 2)) +
+  labs(
+    title = "Occupancy rate by hour",
+    x = "Hour of day",
+    y = "Occupancy rate"
+  ) +
+  theme_minimal()
+
+```
+
+The hourly pattern shows when parking demand is strongest across the day. This helps answer whether congestion is tied to business hours, evening activity, or a broader all-day pattern.
+
+The hourly pattern is clearly uneven. **Occupancy is relatively high overnight and in the early hours of the morning**, with **hour 0** reaching roughly **0.69**. It remains moderate through the early morning, then gradually declines through the late morning and early afternoon.
+
+**The lowest point appears around hour 13**, where the occupancy rate falls to about **0.10**. After that, **occupancy begins to rise again through the late afternoon**. The strongest peak occurs around **hour 18**, where the occupancy rate reaches roughly **0.77**, before **remaining elevated into the evening**.
+
+There is also a relatively high level of occupancy at **23:00** and around **midnight**, which suggests that busy periods are **not limited to standard business hours**.
+
+This suggests that, in this sample, **the most difficult time to find parking is likely to be late afternoon and evening** rather than the middle of the day. That is a useful finding because it suggests the pressure on parking may be linked not only to daytime work activity, but also to later city activity.
+
+#### Aspect 3: How does occupancy change by day of week
+
+The next step is to check whether occupancy patterns also differ by weekday. Weekday patterns help distinguish work-related parking demand from weekend or leisure-related demand. If the busiest days differ from the busiest hours, that suggests parking congestion is shaped by more than one urban activity pattern.
+
+```{r}
+weekday_summary <- parking_clean |>
+  group_by(day_of_week) |>
+  summarise(
+    occ_rate = mean(occupied, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+weekday_summary
+```
+
+The weekday summary shows a clear difference between weekdays and weekends. **Monday has the highest observed occupancy rate at about 0.589**, followed by Wednesday and Friday, while **Saturday is the lowest at about 0.354** and Sunday remains below 0.4
+
+```{r}
+ggplot(weekday_summary, aes(x = day_of_week, y = occ_rate)) +
+  geom_col(fill = "#d95f02") +
+  labs(
+    title = "Occupancy rate by day of week",
+    x = "Day of week",
+    y = "Occupancy rate"
+  ) +
+  theme_minimal()
+```
+
+The bar chart reinforces that result visually. **Weekday occupancy is consistently higher than weekend occupancy**, with the sharpest drop occurring on Saturday, and only a slight recovery on Sunday. **Thursday is also somewhat lower than the other weekdays**, but still noticeably above the weekend values.
+
+This suggests that the **strongest parking pressure in the sample is associated more with weekday urban activity** than with weekend demand. In other words, the busiest days are not evenly spread across the week.
+
 **V1 Reflection:**
 
 In this early version, I focused only on getting the data loaded into R. Instead of manually downloading the dtasets from the City of Melbourne website as I did on the submission for early feedback, and then loading them into R, this time I tried to download data directly from the url on Rstudio. However, this time, I noticed that when I download the datasets from the url using R markdown, the downloaded CSV files used a semicolon delimiter, so the dataset loaded as a single column. This is something I will have to fix before proceeding with any further analysis, so at this stage, the main focus is simply getting the file structure and dataset loading working.
@@ -267,3 +429,9 @@ In this early version, I focused only on getting the data loaded into R. Instead
 In this version, after realizing the delimiter problem, I fixed the import issue from the first draft using `read_delim(..., delim = ";")` and successfully imported the data into a format that could actually be analysed instead of being read as one long column. I then began cleaning the key variables so the timestamps, zone numbers, and occupancy values could be used properly and also started creating the time-based fields like hour and day of week.
 
 Another thing I learned at this stage was that the location field needed extra wrangling before it could be used in maps. Splitting coordinates into latitude and longitude and checking for missing values took a bit of trial and error, but it was necessary before I could move on to any spatial visualisation. This version still feels very preliminary, but is a major step forward because the dataset is now structured enough to support summaries by time and place and I've also added a data dictionary file to supplement understanding.
+
+**V3 Reflection:**
+
+In this version, I moved beyond just cleaning the data and started building the actual analysis, commentating it along the way with my blog post. The biggest change from the earlier version was that I could now summarise occupancy by zone and time, which meant I was finally able to answer the research question in a more direct way. Additionally, I added more details about the sources and file structure in the README file and also decided to add a spatial aspect to my project by incorporating the municipal boundary and plotting the parking observations on a map, but haven't implemented it yet.
+
+This stage also showed me that I needed a clearer way of defining “consistent congestion,” because just looking at the busiest zones was not enough. That led me to start thinking more carefully about persistence across time, rather than only average occupancy. At this point, the project is still missing some refinement, but it has already become much stronger because the analysis now combined time-based summaries, which gave me a better sense of what the final report would look like.
