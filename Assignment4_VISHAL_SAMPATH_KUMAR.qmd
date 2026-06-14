@@ -10,11 +10,7 @@ format:
 editor: visual
 ---
 
-### Proposed Question
-
-I am planning to analyse which Melbourne parking zones are most consistently congested, and how that congestion changes across time of day and day of week. Rather than only identifying the busiest locations, the project will focus on recurring patterns of pressure on parking supply so the final analysis adds a more interesting temporal angle.
-
-## Data Details
+### Data Details
 
 #### Topic of this work
 
@@ -61,6 +57,14 @@ I used the datasets described below to analyse recurring parking congestion in M
     - Use in project: Optional supporting dataset for richer mapping and for understanding joins between the live parking release datasets.
     - Limitation: Not every related parking dataset joins directly to every other dataset; the sensor data joins to the parking bays data by `marker_id`.
 
+4.  **Municipal Boundary**
+
+    - Source: City of Melbourne / Victorian Government Data Directory.
+    - Link: \[Municipal boundary\](https://data.melbourne.vic.gov.au/explore/dataset/municipal-boundary/.
+    - Content: Boundary of the City of Melbourne municipality used as the basemap polygon for the spatial plots.
+    - Data type: Spatial boundary data.
+    - Use in project: Provides a recognisable Melbourne map so the parking points can be plotted on the municipality rather than on blank coordinate axes.
+
 #### Data download
 
 The following section describes how the data can be downloaded from its original sources and the initial processing steps used for analysis.
@@ -94,7 +98,11 @@ url_csv <- "https://data.melbourne.vic.gov.au/explore/dataset/on-street-parking-
 destfile_csv <- here::here("raw_data/on-street-parking-bay-sensors.csv")
 download.file(url_csv, destfile_csv, mode = "wb")
 
-parking_sensor_raw <- read_csv("raw_data/on-street-parking-bay-sensors.csv") |> 
+parking_sensor_raw <- read_delim(
+  destfile_csv,
+  delim = ";",
+  show_col_types = FALSE
+) |>
   clean_names()
 ```
 
@@ -126,45 +134,136 @@ url_bays <- "https://data.melbourne.vic.gov.au/explore/dataset/on-street-parking
 destfile_bays <- here::here("raw_data/on-street-parking-bays.csv")
 download.file(url_bays, destfile_bays, mode = "wb")
 
-parking_bays_raw <- read_csv(destfile_bays)|>
+parking_bays_raw <- read_delim(
+  destfile_bays,
+  delim = ";",
+  show_col_types = FALSE
+) |>
   clean_names()
 ```
 
-This supporting dataset is optional for the final analysis, but it is useful for documenting how the City of Melbourne’s live parking datasets relate to each other.
+This supporting dataset is useful for documenting how the City of Melbourne’s live parking datasets relate to each other.
 
-\[ x \] Write some pseudo-code, does your approach make sense?
+#### Data cleaning and preparation
 
-The plan is to clean the data, create time-based variables, summarise occupancy by zone and time, then visualise the most consistently congested areas and their patterns.
+Before analysing congestion, the raw parking sensor data needs to be converted into a form that is easier to summarise. That includes parsing timestamps properly, extracting useful time-based variables such as hour and day of week, converting latitude and longitude into numeric form, and creating a simple logical indicator that marks whether a bay is occupied.
+
+The main steps used to process the data are listed below.
+
+1.  Import the raw CSV sensor data.
+2.  Import the geojson or shapefile spatial data.
+3.  Clean variable names.
+4.  Parse timestamp fields into proper datetime format.
+5.  Create derived variables such as hour, weekday, and date.
+6.  Recode `status_description` into an occupied indicator.
+7.  Remove or flag missing zone values.
+8.  Split the coordinate field into latitude and longitude.
+9.  Summarise occupancy by zone, hour, and weekday.
+10. Save the cleaned analysis file separately from the raw data.
 
 ```{r}
-#| eval: false
-# Pseudo-analysis workflow
-# 1. Import CSV and shapefile/geojson
-# 2. Clean variable names and parse datetimes
-# 3. Convert status_description into a congestion indicator, such as occupied vs vacant.
-# 4. Create hour, weekday, and date features
-# 5. Summarise congestion by zone, hour, and weekday and calculate congestion measures for each zone, such as average occupancy rate and the proportion of time the bay is occupied.
-# 6. Identify zones that are consistently congested by looking for high occupancy across many time periods, rather than just one peak, and mark a zone as “consistently congested” if it stays above a chosen threshold.
-# For example, a zone that is moderately occupied from 8am to 6pm on most weekdays may be more “consistently congested” than a zone that is extremely full for a single hour once a week
-# 7. Compare these zones to others that are only busy at certain times.
-# 8. Join summaries to spatial geometry by marker_id
-# 9. Plot hourly and weekly patterns, then map the zones with the highest persistent congestion
+parking_clean <- parking_sensor_raw |>
+  mutate(
+    lastupdated = ymd_hms(lastupdated),
+    status_timestamp = ymd_hms(status_timestamp),
+    hour = hour(status_timestamp),
+    day_of_week = wday(status_timestamp, label = TRUE, week_start = 1),
+    date = as_date(status_timestamp),
+    occupied = case_when(
+      str_trim(str_to_lower(status_description)) == "present" ~ TRUE,
+      str_trim(str_to_lower(status_description)) == "unoccupied" ~ FALSE,
+      TRUE ~ NA
+    )
+  ) |>
+  separate(location, into = c("latitude", "longitude"), sep = ",", remove = FALSE) |>
+  mutate(
+    latitude = as.numeric(str_trim(latitude)),
+    longitude = as.numeric(str_trim(longitude))
+  ) |>
+  filter(
+    !is.na(zone_number),
+    !is.na(status_timestamp),
+    !is.na(hour),
+    !is.na(day_of_week),
+    !is.na(latitude),
+    !is.na(longitude),
+    !is.na(occupied)
+  )
 
-# Planned outputs for the full assignment
-# 1. A cleaned tabular parking dataset
-# 2. Cleaned spatial sensor data
-# 3. Summary tables of congestion by zone and time
-# 3. Plots showing hourly and weekday patterns
-# 4. A map of recurring congestion hotspots
-# 5. A short written interpretation of the main findings that links the patterns back to the RQ
+parking_clean
+
+write_csv(parking_clean, here::here("data/parking_processed.csv"))
 ```
 
-This approach makes sense because it lets the analysis distinguish between zones that are only busy occasionally from those that are always busy, which I would take to be the difference needed for “consistent congestion,” answering the rq in a way that is both specific and defensible
+The cleaning step also removes rows with missing values in the key analytical fields. Based on the output shown below, the cleaned dataset contains `r nrow(parking_clean)` rows and `r ncol(parking_clean)` columns, which is the dataset used in the later summaries and visualisations
 
-\[ x \] Lastly, we want you to chose something you are passionate about to practice your learning. So try to have some fun with this!
+Since spatial summaries are needed, the processed summaries can later be joined to the spatial data. The City of Melbourne states that the live sensor dataset joins to the parking bays dataset by `marker_id`, and the sensor dataset joins to the parking restrictions dataset by `bay_id`.
 
-This topic is engaging because it connects everyday urban movement data with practical questions about how city space is used, which makes the project practical and interesting. Because I live near the CBD, whenever I have friends coming over or we plan a night out, figuring out parking is always a painpoint and an item of discussion that has caused many plans to fall through before, which is what led me to investigate this topic and shape my research question around parking congestion.
+#### Creating the data dictionary file
+
+```{r}
+data_dictionary <- tibble(
+  variable = c(
+    "lastupdated",
+    "status_timestamp",
+    "zone_number",
+    "status_description",
+    "kerbsideid",
+    "location",
+    "hour",
+    "day_of_week",
+    "date",
+    "occupied"
+  ),
+  description = c(
+    "Time the record was last updated",
+    "Timestamp of the parking sensor reading",
+    "Parking zone identifier",
+    "Description of whether a car is present or not present",
+    "Kerbside identifier",
+    "Coordinate/location field",
+    "Hour extracted from status_timestamp",
+    "Weekday extracted from status_timestamp",
+    "Calendar date extracted from status_timestamp",
+    "Logical occupied/vacant indicator created for analysis"
+  ),
+  role_in_analysis = c(
+    "Checks update recency",
+    "Main time variable",
+    "Main grouping variable",
+    "Defines congestion proxy",
+    "Optional finer location grouping",
+    "Supports mapping",
+    "Used for hourly summaries",
+    "Used for weekly summaries",
+    "Used for date-based summaries",
+    "Main congestion measure"
+  )
+)
+
+write.xlsx(data_dictionary, here::here("data/data-dictionary.xlsx"))
+```
+
+#### Files included in submission
+
+The submission will include:
+
+- the raw CSV file;
+- the raw GeoJSON or shapefile;
+- the optional raw parking bays file;
+- the Melbourne municipal boundary GeoJSON;
+- the processed CSV file;
+- a readme file describing the source and folder structure;
+- and a data dictionary saved as an `.xlsx` file.
+
+This documentation makes it clear what was downloaded, what was changed, and what was used in the analysis.
 
 **V1 Reflection:**
 
 In this early version, I focused only on getting the data loaded into R. Instead of manually downloading the dtasets from the City of Melbourne website as I did on the submission for early feedback, and then loading them into R, this time I tried to download data directly from the url on Rstudio. However, this time, I noticed that when I download the datasets from the url using R markdown, the downloaded CSV files used a semicolon delimiter, so the dataset loaded as a single column. This is something I will have to fix before proceeding with any further analysis, so at this stage, the main focus is simply getting the file structure and dataset loading working.
+
+**V2 Reflection:**
+
+In this version, after realizing the delimiter problem, I fixed the import issue from the first draft using `read_delim(..., delim = ";")` and successfully imported the data into a format that could actually be analysed instead of being read as one long column. I then began cleaning the key variables so the timestamps, zone numbers, and occupancy values could be used properly and also started creating the time-based fields like hour and day of week.
+
+Another thing I learned at this stage was that the location field needed extra wrangling before it could be used in maps. Splitting coordinates into latitude and longitude and checking for missing values took a bit of trial and error, but it was necessary before I could move on to any spatial visualisation. This version still feels very preliminary, but is a major step forward because the dataset is now structured enough to support summaries by time and place and I've also added a data dictionary file to supplement understanding.
