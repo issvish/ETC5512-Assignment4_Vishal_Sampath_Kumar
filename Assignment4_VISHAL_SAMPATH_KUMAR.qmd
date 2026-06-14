@@ -10,7 +10,7 @@ format:
 editor: visual
 ---
 
-### Data Details
+## Data Details
 
 #### Topic of this work
 
@@ -47,20 +47,10 @@ I used the datasets described below to analyse recurring parking congestion in M
     - Limitations: Spatial points help show location, but they do not on their own explain why some areas are more congested than others.
     - Privacy/Ethics: Public infrastructure data with low privacy risk.
 
-3.  **On-street Parking Bays**
-
-    - Source: City of Melbourne Open Data Portal.
-    - Link: (data.melbourne.vic.gov.au). [On-street Parking Bay Sensors](https://data.melbourne.vic.gov.au/explore/dataset/on-street-parking-bay-sensors/information/?dataChart=eyJxdWVyaWVzIjpbeyJjaGFydHMiOlt7InR5cGUiOiJjb2x1bW4iLCJmdW5jIjoiQ09VTlQiLCJ5QXhpcyI6ImJheV9pZCIsInNjaWVudGlmaWNEaXNwbGF5Ijp0cnVlLCJjb2xvciI6InJhbmdlLWN1c3RvbSJ9XSwieEF4aXMiOiJsYXN0dXBkYXRlZCIsIm1heHBvaW50cyI6NTAsInNvcnQiOiIiLCJ0aW1lc2NhbGUiOiJkYXkiLCJjb25maWciOnsiZGF0YXNldCI6Im9uLXN0cmVldC1wYXJraW5nLWJheS1zZW5zb3JzIiwib3B0aW9ucyI6e319LCJzZXJpZXNCcmVha2Rvd24iOiJ6b25lX251bWJlciJ9XSwidGltZXNjYWxlIjoiIiwiZGlzcGxheUxlZ2VuZCI6dHJ1ZSwiYWxpZ25Nb250aCI6dHJ1ZX0%3D) .
-    - Content: Spatial polygons representing parking bays across the city.
-    - Data type: Spatial administrative open data.
-    - Licence/conditions: Public open data with City of Melbourne disclaimer noted on the dataset page.
-    - Use in project: Optional supporting dataset for richer mapping and for understanding joins between the live parking release datasets.
-    - Limitation: Not every related parking dataset joins directly to every other dataset; the sensor data joins to the parking bays data by `marker_id`.
-
-4.  **Municipal Boundary**
+3.  **Municipal Boundary**
 
     - Source: City of Melbourne / Victorian Government Data Directory.
-    - Link: \[Municipal boundary\](https://data.melbourne.vic.gov.au/explore/dataset/municipal-boundary/.
+    - Link: \[Municipal boundary\](<https://data.melbourne.vic.gov.au/explore/dataset/municipal-boundary/.>
     - Content: Boundary of the City of Melbourne municipality used as the basemap polygon for the spatial plots.
     - Data type: Spatial boundary data.
     - Use in project: Provides a recognisable Melbourne map so the parking points can be plotted on the municipality rather than on blank coordinate axes.
@@ -126,23 +116,18 @@ If working with the downloaded shapefile instead, all associated files (`.shp`, 
 # parking_sensor_geo <- st_read(here::here("raw_data/on-street-parking-bay-sensors/on-street-parking-bay-sensors.shp"))
 ```
 
-**Downloading Dataset 3**
+**Downloading the Melbourne municipal boundary**
 
 ```{r}
-url_bays <- "https://data.melbourne.vic.gov.au/explore/dataset/on-street-parking-bays/download/?format=csv&timezone=Australia/Melbourne&lang=en"
+boundary_url <- "https://data.melbourne.vic.gov.au/api/v2/catalog/datasets/municipal-boundary/exports/geojson"
 
-destfile_bays <- here::here("raw_data/on-street-parking-bays.csv")
-download.file(url_bays, destfile_bays, mode = "wb")
+boundary_file <- here::here("raw_data/municipal-boundary.geojson")
+download.file(boundary_url, boundary_file, mode = "wb")
 
-parking_bays_raw <- read_delim(
-  destfile_bays,
-  delim = ";",
-  show_col_types = FALSE
-) |>
-  clean_names()
+melbourne_boundary <- st_read(boundary_file, quiet = TRUE)
 ```
 
-This supporting dataset is useful for documenting how the City of Melbourne’s live parking datasets relate to each other.
+The municipal boundary file provides the polygon boundary of the City of Melbourne municipality and is used as the background map for the parking plots
 
 #### Data cleaning and preparation
 
@@ -157,9 +142,8 @@ The main steps used to process the data are listed below.
 5.  Create derived variables such as hour, weekday, and date.
 6.  Recode `status_description` into an occupied indicator.
 7.  Remove or flag missing zone values.
-8.  Split the coordinate field into latitude and longitude.
-9.  Summarise occupancy by zone, hour, and weekday.
-10. Save the cleaned analysis file separately from the raw data.
+8.  Summarise occupancy by zone, hour, and weekday.
+9.  Save the cleaned analysis file separately from the raw data.
 
 ```{r}
 parking_clean <- parking_sensor_raw |>
@@ -198,6 +182,33 @@ write_csv(parking_clean, here::here("data/parking_processed.csv"))
 The cleaning step also removes rows with missing values in the key analytical fields. Based on the output shown below, the cleaned dataset contains `r nrow(parking_clean)` rows and `r ncol(parking_clean)` columns, which is the dataset used in the later summaries and visualisations
 
 Since spatial summaries are needed, the processed summaries can later be joined to the spatial data. The City of Melbourne states that the live sensor dataset joins to the parking bays dataset by `marker_id`, and the sensor dataset joins to the parking restrictions dataset by `bay_id`.
+
+The GeoJSON version of the sensor dataset is especially useful because it already contains the live parking records together with a `geometry` column. That makes it more suitable for mapping than relying only on split text coordinates.
+
+```{r}
+parking_sensor_geo_clean <- parking_sensor_geo |>
+  mutate(
+    lastupdated = ymd_hms(lastupdated),
+    status_timestamp = ymd_hms(status_timestamp),
+    hour = hour(status_timestamp),
+    day_of_week = wday(status_timestamp, label = TRUE, week_start = 1),
+    date = as_date(status_timestamp),
+    occupied = case_when(
+      str_trim(str_to_lower(status_description)) == "present" ~ TRUE,
+      str_trim(str_to_lower(status_description)) == "unoccupied" ~ FALSE,
+      TRUE ~ NA
+    )
+  ) |>
+  filter(
+    !is.na(zone_number),
+    !is.na(status_timestamp),
+    !is.na(hour),
+    !is.na(day_of_week),
+    !is.na(occupied)
+  )
+```
+
+This spatial version of the live sensor data is used in the blog post maps because it allows the point locations to be plotted directly from the geometry column rather than from manually split coordinate fields.
 
 #### Creating the data dictionary file
 
@@ -250,13 +261,14 @@ The submission will include:
 
 - the raw CSV file;
 - the raw GeoJSON or shapefile;
-- the optional raw parking bays file;
 - the Melbourne municipal boundary GeoJSON;
 - the processed CSV file;
 - a readme file describing the source and folder structure;
 - and a data dictionary saved as an `.xlsx` file.
 
 This documentation makes it clear what was downloaded, what was changed, and what was used in the analysis.
+
+------------------------------------------------------------------------
 
 ## Blog post
 
@@ -281,11 +293,11 @@ To make the analysis defensible, congestion needs to be defined explicitly. Here
 
 ```{r}
 glimpse(parking_clean)
-glimpse(parking_sensor_geo)
-glimpse(parking_bays_raw)
+glimpse(parking_sensor_geo_clean)
+glimpse(melbourne_boundary)
 ```
 
-The cleaned dataset contains `r nrow(parking_clean)` observations and `r ncol(parking_clean)` variables, which indicates that the filtering and recoding steps have left a sizeable working dataset for analysis. The preview also shows the key variables needed later, including timestamps, zone identifiers, occupancy labels, and coordinate values
+The cleaned datasets contains `r nrow(parking_clean)` observations and `r ncol(parking_clean)` variables in the main CSV file and `r nrow(parking_sensor_geo_clean)` observations and `r ncol(parking_sensor_geo_clean)` in the cleaned GeoJSON dataset, which indicates that the filtering and recoding steps have left a sizeable working dataset for analysis. The preview also shows the key variables needed later, including timestamps, zone identifiers, occupancy labels, and coordinate values
 
 ### What does the data tell us?
 
@@ -420,6 +432,105 @@ The bar chart reinforces that result visually. **Weekday occupancy is consistent
 
 This suggests that the **strongest parking pressure in the sample is associated more with weekday urban activity** than with weekend demand. In other words, the busiest days are not evenly spread across the week.
 
+#### Aspect 4: Spatial pattern
+
+Finally, it is useful to plot the locations of the parking observations on a Melbourne map. The spatial view is important because it shows where the persistent congestion is located, not just when it happens. This directly supports the original question by linking repeated occupancy to place, not only time.
+
+```{r}
+ggplot() +
+  geom_sf(data = melbourne_boundary, fill = "grey95", color = "grey40", linewidth = 0.4) +
+  geom_sf(
+    data = parking_sensor_geo_clean,
+    aes(color = occupied),
+    alpha = 0.7,
+    size = 1.4
+  ) +
+  scale_color_manual(values = c("FALSE" = "grey70", "TRUE" = "#e41a1c")) +
+  coord_sf() +
+  labs(
+    title = "Parking sensor locations on the City of Melbourne map",
+    color = "Occupied"
+  ) +
+  theme_minimal()
+```
+
+This map places the parking sensor observations on the municipal boundary of the City of Melbourne, which makes the spatial pattern easier to interpret than a plot of points alone. It shows where occupied and unoccupied observations are concentrated within the municipality rather than simply displaying them against blank axes.
+
+The spatial plot shows that the sensor points are clustered within a fairly concentrated part of the Melbourne municipal boundary, rather than being evenly spread across the entire map. The red points, which indicate **occupied observations, clearly outnumber the grey unoccupied points** in the central cluster, visually matching the earlier summaries showing occupancy rates above 0.5 for many periods.
+
+This map does not by itself prove which zones are the most persistently congested, but it does provide useful context. It shows that the observed parking activity is spatially concentrated and that occupied observations are common across the central cluster of parking sensor locations.
+
+#### Aspect 5: Zone occupancy map
+
+```{r}
+zone_points <- parking_sensor_geo_clean |>
+  mutate(
+    x = sf::st_coordinates(geometry)[, 1],
+    y = sf::st_coordinates(geometry)[, 2]
+  ) |>
+  st_drop_geometry() |>
+  group_by(zone_number) |>
+  summarise(
+    longitude = mean(x, na.rm = TRUE),
+    latitude = mean(y, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+zone_map_data <- zone_summary |>
+  left_join(zone_points, by = "zone_number")
+
+ggplot() +
+  geom_sf(data = melbourne_boundary, fill = "grey95", color = "grey40", linewidth = 0.4) +
+  geom_point(
+    data = zone_map_data,
+    aes(x = longitude, y = latitude, color = occ_rate, size = records),
+    alpha = 0.8
+  ) +
+  scale_color_viridis_c(option = "C", name = "Occupancy rate") +
+  coord_sf() +
+  labs(
+    title = "Average parking occupancy by zone in the City of Melbourne",
+    size = "Records"
+  ) +
+  theme_minimal()
+```
+
+This second map is more directly tied to the research question because it shows the average occupancy rate by location rather than a single raw occupied or unoccupied state. That makes it easier to spot zones that appear persistently busy rather than temporarily full.
+
+### Interpretation
+
+Looking across all findings together, the analysis suggests that parking congestion in this sample is both spatially concentrated and strongly time-dependent. Several zones have an occupancy rate of 1.00, and several others also have a persistence score of 1.00, meaning that **repeated congestion is not confined to a single isolated case**.
+
+The time-of-day pattern is especially striking. Occupancy dips in the middle of the day and then rises into the evening, peaking around 18:00. That means **the most intense parking pressure in this sample does not occur at midday, but later in the day**.
+
+The weekday pattern is also clear. Monday has the highest occupancy, while Saturday has the lowest, and weekends overall are noticeably less occupied than weekdays. Together, these results suggest that **recurring parking pressure in this dataset is more closely associated with weekday city activity and evening demand than with weekend peaks**.
+
+The first map helps show where these observations are happening. Rather than being evenly spread across the full municipal boundary, the points are clustered in a more central part of Melbourne, and occupied points are visually common within that cluster. This supports the idea that the **occupancy patterns seen in the summaries are tied to a concentrated (CBD and central-eastern) part of the city rather than being uniformly distributed everywhere**.
+
+The second map makes the spatial interpretation clearer by aggregating occupancy at the zone level. Zones with higher occupancy rates stand out in brighter colours, while point size shows that some of these zones are supported by more observations than others. This is important because it adds a second layer of evidence: **not only do some zones look busy in the tables, but those same high-occupancy zones also appear as spatially identifiable parts of the map**.
+
+Overall, the tables, charts, and maps all point in the same direction. **Parking congestion in this sample appears strongest in a subset of zones, higher on weekdays than weekends, and especially pronounced in the late afternoon and evening**.
+
+### Conclusion- So what?
+
+Going down the rabbit hole of understanding the seemingly inexplicable parking behavior in Melbourne turned a familiar local frustration into a structured data analysis using City of Melbourne parking data.
+
+Several zones appear persistently occupied, and the hourly summaries suggest that the strongest parking pressure is not constant through the day. The day-of-week section adds another layer by showing whether those patterns are tied more strongly to weekday or weekend behaviour. Together, the time-based and spatial summaries suggest that the most frustrating parking conditions are likely to be concentrated both geographically and temporally, rather than being uniform across the city.
+
+The most important finding is that **congestion does not appear to be evenly spread across all zones or all times**. Instead, **it is concentrated in central zones, stronger on weekdays, and especially high in the evening**.
+
+### What’s really under the surface?
+
+Here, I was only able to scratch the surface, but in the future I’d like to analyse:
+
+- whether the same zones remain highly occupied across a longer range of dates rather than only within the current sample
+
+- whether weekday and weekend parking patterns differ more sharply when separated by zone
+
+- whether nearby restaurants, offices, events, or other land uses help explain persistent congestion
+
+- and whether a more formal congestion score could be developed by combining occupancy, persistence, and sample size into one measure.
+
 **V1 Reflection:**
 
 In this early version, I focused only on getting the data loaded into R. Instead of manually downloading the dtasets from the City of Melbourne website as I did on the submission for early feedback, and then loading them into R, this time I tried to download data directly from the url on Rstudio. However, this time, I noticed that when I download the datasets from the url using R markdown, the downloaded CSV files used a semicolon delimiter, so the dataset loaded as a single column. This is something I will have to fix before proceeding with any further analysis, so at this stage, the main focus is simply getting the file structure and dataset loading working.
@@ -435,3 +546,9 @@ Another thing I learned at this stage was that the location field needed extra w
 In this version, I moved beyond just cleaning the data and started building the actual analysis, commentating it along the way with my blog post. The biggest change from the earlier version was that I could now summarise occupancy by zone and time, which meant I was finally able to answer the research question in a more direct way. Additionally, I added more details about the sources and file structure in the README file and also decided to add a spatial aspect to my project by incorporating the municipal boundary and plotting the parking observations on a map, but haven't implemented it yet.
 
 This stage also showed me that I needed a clearer way of defining “consistent congestion,” because just looking at the busiest zones was not enough. That led me to start thinking more carefully about persistence across time, rather than only average occupancy. At this point, the project is still missing some refinement, but it has already become much stronger because the analysis now combined time-based summaries, which gave me a better sense of what the final report would look like.
+
+**V4 Reflection:**
+
+In this version, I moved to a more complete analysis that used both the tabular sensor data and the spatial sensor file in a more intentional way and went a step further to interpret and communicate my findings as succinctly as I can. The biggest change from V3 was that I realized that rather than treating spatial data as an afterthought and trying to parse and derive it from the CSV data, instead using the spacial data from GeoJSON directly in the mapping sections while the CSV stayed the main source for zone-level summaries and time-based patterns felt a lot more intuitive and would probably make for a more reliable frame for analysis.
+
+Another important change was that I became more selective about which supporting datasets were actually worth including. After checking the parking bays dataset more carefully, I decided it was not the best fit for the final analysis because it only extended to 2024, which made it older than the live sensor datasets that reached 2026, and it also did not add much beyond what the spatial sensor file already provided. That helped narrow the project to the datasets that were most current and most useful for answering the question.

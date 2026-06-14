@@ -23,7 +23,6 @@ assignment4
 ├── raw_data
 │   ├── on-street-parking-bay-sensors.csv  -> Raw parking sensor CSV downloaded from City of Melbourne
 │   ├── on-street-parking-bay-sensors.geojson -> Raw parking sensor GeoJSON downloaded from City of Melbourne
-│   └── on-street-parking-bays.csv         -> Raw parking bays CSV downloaded from City of Melbourne
 ├── README.md                              -> This file
 └── assignment4.Rproj
 
