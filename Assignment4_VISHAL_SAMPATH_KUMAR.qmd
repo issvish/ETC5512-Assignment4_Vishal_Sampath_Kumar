@@ -310,7 +310,7 @@ The first useful summary is the zone-level occupancy table shown below.
 
 #### Aspect 1: Zone patterns
 
-```{r}
+```{r, eval=TRUE, echo=FALSE}
 zone_summary <- parking_clean |>
   group_by(zone_number) |>
   summarise(
@@ -333,7 +333,7 @@ In general though, all these zones have relatively small record counts, which me
 
 However, a high mean occupancy on its own does not distinguish between zones that are always busy and zones that only appear in a limited subset of time periods. A second summary considers persistence across hourly windows rather than just the overall average.
 
-```{r}
+```{r, eval=TRUE, echo=FALSE}
 zone_hour <- parking_clean |>
   group_by(zone_number, hour) |>
   summarise(
@@ -367,7 +367,7 @@ These summaries make it possible to distinguish between zones that are always bu
 
 The hourly summary shows when parking demand is strongest across the day. This helps answer whether congestion is tied to business hours, evening activity, or a broader all-day pattern.
 
-```{r}
+```{r, eval=TRUE, echo=FALSE}
 hour_summary <- parking_clean |>
   group_by(hour) |>
   summarise(
@@ -380,7 +380,7 @@ hour_summary
 
 ```
 
-```{r}
+```{r, eval=TRUE, echo=FALSE}
 ggplot(hour_summary, aes(x = hour, y = occ_rate)) +
   geom_col(fill = "#2a6fdb") +
   scale_x_continuous(breaks = seq(0, 23, 2)) +
@@ -403,7 +403,7 @@ This suggests that, in this sample, **the most difficult time to find parking is
 
 The next step is to check whether occupancy patterns also differ by weekday. Weekday patterns help distinguish work-related parking demand from weekend or leisure-related demand. If the busiest days differ from the busiest hours, that suggests parking congestion is shaped by more than one urban activity pattern.
 
-```{r}
+```{r, eval=TRUE, echo=FALSE}
 weekday_summary <- parking_clean |>
   group_by(day_of_week) |>
   summarise(
@@ -416,7 +416,7 @@ weekday_summary
 
 The weekday summary shows a clear difference between weekdays and weekends. **Monday has the highest observed occupancy rate at about 0.585**, while **Friday is the lowest at about 0.468** and Sunday remains below 0.4
 
-```{r}
+```{r, eval=TRUE, echo=FALSE}
 ggplot(weekday_summary, aes(x = day_of_week, y = occ_rate)) +
   geom_col(fill = "#d95f02") +
   labs(
@@ -435,7 +435,7 @@ This suggests that the **strongest parking pressure in the sample is associated 
 
 Finally, it is useful to plot the locations of the parking observations on a Melbourne map. The spatial view is important because it shows where the persistent congestion is located, not just when it happens. This directly supports the original question by linking repeated occupancy to place, not only time.
 
-```{r}
+```{r, eval=TRUE, echo=FALSE}
 ggplot() +
   geom_sf(data = melbourne_boundary, fill = "grey95", color = "grey40", linewidth = 0.4) +
   geom_sf(
@@ -457,7 +457,7 @@ This map places the parking sensor observations on the municipal boundary of the
 
 #### Aspect 5: Zone occupancy map
 
-```{r}
+```{r, eval=TRUE, echo=FALSE}
 zone_points <- parking_sensor_geo_clean |>
   mutate(
     x = sf::st_coordinates(geometry)[, 1],

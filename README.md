@@ -11,7 +11,6 @@ The .csv files under data are based on City of Melbourne open datasets (please r
 
 The dataset used to derive "parking_processed.csv" is based on the On-street Parking Bay Sensors dataset.
 The dataset used to derive supporting spatial summaries is based on the On-street Parking Bay Sensors GeoJSON export.
-The supporting parking bay file is based on the On-street Parking Bays dataset.
 
 ## File structure of this dataset
 

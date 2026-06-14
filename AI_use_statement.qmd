@@ -1,0 +1,29 @@
+## AI acknowledgment
+
+I used AI as a support tool rather than as a replacement for my own judgement. One useful part of using AI was that it helped me realise that the CSV and GeoJSON files had different strengths and work through through how to simplify my workflow, so I could separate the tabular summaries from the spatial mapping instead of forcing everything into one pipeline. It was a great asset in that regard because it improved both the structure of the analysis and my understanding of how to work with different data formats more effectively. It was also quite useful when I was trying to decide which datasets were actually worth using, because it helped me think through the difference between a dataset that was available and one that was genuinely useful for the question.
+
+More specifically, I used AI to:
+
+- Help me refine my research question around Melbourne parking congestion so it could be answered with time-based and spatial summaries.
+
+- Help me design a simple workflow for the project, including data import, cleaning, analysis, and spatial mapping.
+
+- Explain how to import a CSV correctly when it used semicolons instead of commas, and how to check that the file had been read properly.
+
+- Help me define a better measure of consistent congestion than just average occupancy, so I could capture repeated busy behaviour across time.
+
+- Help me distinguish between the most useful primary dataset and supporting datasets, especially when some files overlapped.
+
+- Help me decide whether to include a dataset that only extended to 2024 when the other datasets were updated to 2026.
+
+- Help me understand how to join data in R and when to use `left_join()`, `inner_join()`, and `full_join()`.
+
+- Help me organise my GitHub version history and commit sequence across the full workflow.
+
+- Help me list the prompts I had used so far so I could document them properly.
+
+AI was not always reliable on its own though, so I had to check and refine a lot of its suggestions. For example, I verified dataset details, checked whether the spatial file actually contained geometry, and corrected the example codes it would give me to fit my dataset and research question, and further iterate and refine it myself to get the outputs I desired. I also questioned some of the analysis suggestions when they looked too complicated or when they duplicated information unnecessarily. In those cases, I used AI more like a brainstorming partner than an authority, and I made sure the final choices still made sense for the assignment. The analytical decisions, coding, interpretation, and written submission were completed by me. AI was used only as a support tool, and I take full responsibility for the final work submitted.
+
+Here is the link to all prompts used:
+
+[https://chatgpt.com/share/69eb5314-7128-8323-b990-549d0a3ddce2](https://www.perplexity.ai/search/5b263c99-1d48-4da6-833e-c097641adc6f?sm=d)
