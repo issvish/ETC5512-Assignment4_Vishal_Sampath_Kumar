@@ -1,0 +1,170 @@
+---
+title: "Assignment 4"
+subtitle: "Parking congestion in Melbourne CBD"
+author: "Vishal Sampath Kumar"
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+    number-sections: true
+editor: visual
+---
+
+### Proposed Question
+
+I am planning to analyse which Melbourne parking zones are most consistently congested, and how that congestion changes across time of day and day of week. Rather than only identifying the busiest locations, the project will focus on recurring patterns of pressure on parking supply so the final analysis adds a more interesting temporal angle.
+
+## Data Details
+
+#### Topic of this work
+
+Which Melbourne parking zones are most consistently congested, and how does that congestion vary by time of day and day of week?
+
+#### Why this topic
+
+I chose this topic because I live near the CBD, whenever I have friends coming over or we plan a night out, figuring out parking is always a painpoint and an item of discussion that has caused many plans to fall through before, which is what led me to investigate this topic and shape my research question around parking congestion. This topic is engaging to me because it connects everyday urban movement data with practical questions about how city space is used, which makes the project practical and interesting.
+
+#### Data description
+
+I used the datasets described below to analyse recurring parking congestion in Melbourne. Together, these files provide timestamped bay status information and spatial location data, which makes them suitable for both time-based and map-based analysis.
+
+**Datasets:**
+
+1.  **On-street Parking Bay Sensors**
+
+    - Source: City of Melbourne Open Data Portal.
+    - Link: (data.melbourne.vic.gov.au). [On-street Parking Bay Sensors](https://data.melbourne.vic.gov.au/explore/dataset/on-street-parking-bay-sensors/information/?dataChart=eyJxdWVyaWVzIjpbeyJjaGFydHMiOlt7InR5cGUiOiJjb2x1bW4iLCJmdW5jIjoiQ09VTlQiLCJ5QXhpcyI6ImJheV9pZCIsInNjaWVudGlmaWNEaXNwbGF5Ijp0cnVlLCJjb2xvciI6InJhbmdlLWN1c3RvbSJ9XSwieEF4aXMiOiJsYXN0dXBkYXRlZCIsIm1heHBvaW50cyI6NTAsInNvcnQiOiIiLCJ0aW1lc2NhbGUiOiJkYXkiLCJjb25maWciOnsiZGF0YXNldCI6Im9uLXN0cmVldC1wYXJraW5nLWJheS1zZW5zb3JzIiwib3B0aW9ucyI6e319LCJzZXJpZXNCcmVha2Rvd24iOiJ6b25lX251bWJlciJ9XSwidGltZXNjYWxlIjoiIiwiZGlzcGxheUxlZ2VuZCI6dHJ1ZSwiYWxpZ25Nb250aCI6dHJ1ZX0%3D) .
+    - Content: Live parking bay sensor data showing whether a vehicle is present or not present, along with spatial coordinates and kerbside ID.
+    - Data type: Observational administrative open data, effectively a live operational record rather than a sample or experiment.
+    - Update frequency: Approximately every two minutes.
+    - Licence: CC BY / Creative Commons Attribution 4.0.
+    - Limitations: Depends on sensor reliability, may contain missing values, and reflects bay status rather than the full context of driver behaviour.
+    - Privacy/Ethics: Low privacy risk because the data concerns parking bays rather than named individuals, but the analysis will remain aggregated and will not attempt to identify vehicles or people.
+
+2.  **On-street Parking Bay Sensors Spatial File (GeoJSON or SHP)**
+
+    - Source: Same City of Melbourne dataset page.
+    - Link: (data.melbourne.vic.gov.au). [On-street Parking Bay Sensors](https://data.melbourne.vic.gov.au/explore/dataset/on-street-parking-bay-sensors/information/?dataChart=eyJxdWVyaWVzIjpbeyJjaGFydHMiOlt7InR5cGUiOiJjb2x1bW4iLCJmdW5jIjoiQ09VTlQiLCJ5QXhpcyI6ImJheV9pZCIsInNjaWVudGlmaWNEaXNwbGF5Ijp0cnVlLCJjb2xvciI6InJhbmdlLWN1c3RvbSJ9XSwieEF4aXMiOiJsYXN0dXBkYXRlZCIsIm1heHBvaW50cyI6NTAsInNvcnQiOiIiLCJ0aW1lc2NhbGUiOiJkYXkiLCJjb25maWciOnsiZGF0YXNldCI6Im9uLXN0cmVldC1wYXJraW5nLWJheS1zZW5zb3JzIiwib3B0aW9ucyI6e319LCJzZXJpZXNCcmVha2Rvd24iOiJ6b25lX251bWJlciJ9XSwidGltZXNjYWxlIjoiIiwiZGlzcGxheUxlZ2VuZCI6dHJ1ZSwiYWxpZ25Nb250aCI6dHJ1ZX0%3D) .
+    - Content: Spatial representation of the parking sensor data that can be used for mapping sensor locations.
+    - Data type: Spatial open data.
+    - Licence: CC BY / Creative Commons Attribution 4.0.
+    - Limitations: Spatial points help show location, but they do not on their own explain why some areas are more congested than others.
+    - Privacy/Ethics: Public infrastructure data with low privacy risk.
+
+3.  **On-street Parking Bays**
+
+    - Source: City of Melbourne Open Data Portal.
+    - Link: (data.melbourne.vic.gov.au). [On-street Parking Bay Sensors](https://data.melbourne.vic.gov.au/explore/dataset/on-street-parking-bay-sensors/information/?dataChart=eyJxdWVyaWVzIjpbeyJjaGFydHMiOlt7InR5cGUiOiJjb2x1bW4iLCJmdW5jIjoiQ09VTlQiLCJ5QXhpcyI6ImJheV9pZCIsInNjaWVudGlmaWNEaXNwbGF5Ijp0cnVlLCJjb2xvciI6InJhbmdlLWN1c3RvbSJ9XSwieEF4aXMiOiJsYXN0dXBkYXRlZCIsIm1heHBvaW50cyI6NTAsInNvcnQiOiIiLCJ0aW1lc2NhbGUiOiJkYXkiLCJjb25maWciOnsiZGF0YXNldCI6Im9uLXN0cmVldC1wYXJraW5nLWJheS1zZW5zb3JzIiwib3B0aW9ucyI6e319LCJzZXJpZXNCcmVha2Rvd24iOiJ6b25lX251bWJlciJ9XSwidGltZXNjYWxlIjoiIiwiZGlzcGxheUxlZ2VuZCI6dHJ1ZSwiYWxpZ25Nb250aCI6dHJ1ZX0%3D) .
+    - Content: Spatial polygons representing parking bays across the city.
+    - Data type: Spatial administrative open data.
+    - Licence/conditions: Public open data with City of Melbourne disclaimer noted on the dataset page.
+    - Use in project: Optional supporting dataset for richer mapping and for understanding joins between the live parking release datasets.
+    - Limitation: Not every related parking dataset joins directly to every other dataset; the sensor data joins to the parking bays data by `marker_id`.
+
+#### Data download
+
+The following section describes how the data can be downloaded from its original sources and the initial processing steps used for analysis.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE
+)
+
+library(tidyverse)
+library(here)
+library(lubridate)
+library(sf)
+library(janitor)
+library(openxlsx)
+library(viridis)
+```
+
+```{r}
+dir.create(here::here("raw_data"), showWarnings = FALSE)
+dir.create(here::here("data"), showWarnings = FALSE)
+```
+
+**Downloading Dataset 1**
+
+```{r}
+url_csv <- "https://data.melbourne.vic.gov.au/explore/dataset/on-street-parking-bay-sensors/download/?format=csv&timezone=Australia/Melbourne&lang=en"
+
+destfile_csv <- here::here("raw_data/on-street-parking-bay-sensors.csv")
+download.file(url_csv, destfile_csv, mode = "wb")
+
+parking_sensor_raw <- read_csv("raw_data/on-street-parking-bay-sensors.csv") |> 
+  clean_names()
+```
+
+If the direct download link changes, the file can be downloaded manually from the dataset page and saved as `raw_data/on-street-parking-bay-sensors.csv`.
+
+**Downloading Dataset 2**
+
+```{r}
+url_geojson <- "https://data.melbourne.vic.gov.au/explore/dataset/on-street-parking-bay-sensors/download/?format=geojson&timezone=Australia/Melbourne&lang=en"
+
+destfile_geojson <- here::here("raw_data/on-street-parking-bay-sensors.geojson")
+download.file(url_geojson, destfile_geojson, mode = "wb")
+
+parking_sensor_geo <- st_read(destfile_geojson, quiet = TRUE)
+```
+
+If working with the downloaded shapefile instead, all associated files (`.shp`, `.shx`, `.dbf`, `.prj`, `.cpg`) should be stored together in the same folder before reading the `.shp` file.
+
+```{r}
+# If using a shapefile instead of geojson:
+# parking_sensor_geo <- st_read(here::here("raw_data/on-street-parking-bay-sensors/on-street-parking-bay-sensors.shp"))
+```
+
+**Downloading Dataset 3**
+
+```{r}
+url_bays <- "https://data.melbourne.vic.gov.au/explore/dataset/on-street-parking-bays/download/?format=csv&timezone=Australia/Melbourne&lang=en"
+
+destfile_bays <- here::here("raw_data/on-street-parking-bays.csv")
+download.file(url_bays, destfile_bays, mode = "wb")
+
+parking_bays_raw <- read_csv(destfile_bays)|>
+  clean_names()
+```
+
+This supporting dataset is optional for the final analysis, but it is useful for documenting how the City of Melbourne’s live parking datasets relate to each other.
+
+\[ x \] Write some pseudo-code, does your approach make sense?
+
+The plan is to clean the data, create time-based variables, summarise occupancy by zone and time, then visualise the most consistently congested areas and their patterns.
+
+```{r}
+#| eval: false
+# Pseudo-analysis workflow
+# 1. Import CSV and shapefile/geojson
+# 2. Clean variable names and parse datetimes
+# 3. Convert status_description into a congestion indicator, such as occupied vs vacant.
+# 4. Create hour, weekday, and date features
+# 5. Summarise congestion by zone, hour, and weekday and calculate congestion measures for each zone, such as average occupancy rate and the proportion of time the bay is occupied.
+# 6. Identify zones that are consistently congested by looking for high occupancy across many time periods, rather than just one peak, and mark a zone as “consistently congested” if it stays above a chosen threshold.
+# For example, a zone that is moderately occupied from 8am to 6pm on most weekdays may be more “consistently congested” than a zone that is extremely full for a single hour once a week
+# 7. Compare these zones to others that are only busy at certain times.
+# 8. Join summaries to spatial geometry by marker_id
+# 9. Plot hourly and weekly patterns, then map the zones with the highest persistent congestion
+
+# Planned outputs for the full assignment
+# 1. A cleaned tabular parking dataset
+# 2. Cleaned spatial sensor data
+# 3. Summary tables of congestion by zone and time
+# 3. Plots showing hourly and weekday patterns
+# 4. A map of recurring congestion hotspots
+# 5. A short written interpretation of the main findings that links the patterns back to the RQ
+```
+
+This approach makes sense because it lets the analysis distinguish between zones that are only busy occasionally from those that are always busy, which I would take to be the difference needed for “consistent congestion,” answering the rq in a way that is both specific and defensible
+
+\[ x \] Lastly, we want you to chose something you are passionate about to practice your learning. So try to have some fun with this!
+
+This topic is engaging because it connects everyday urban movement data with practical questions about how city space is used, which makes the project practical and interesting. Because I live near the CBD, whenever I have friends coming over or we plan a night out, figuring out parking is always a painpoint and an item of discussion that has caused many plans to fall through before, which is what led me to investigate this topic and shape my research question around parking congestion.
+
+**V1 Reflection:**
+
+In this early version, I focused only on getting the data loaded into R. Instead of manually downloading the dtasets from the City of Melbourne website as I did on the submission for early feedback, and then loading them into R, this time I tried to download data directly from the url on Rstudio. However, this time, I noticed that when I download the datasets from the url using R markdown, the downloaded CSV files used a semicolon delimiter, so the dataset loaded as a single column. This is something I will have to fix before proceeding with any further analysis, so at this stage, the main focus is simply getting the file structure and dataset loading working.
